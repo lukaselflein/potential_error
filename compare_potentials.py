@@ -40,6 +40,14 @@ def create_structure(infile_pdb='snapshot_100.pdb', infile_top='topol.top', hydr
 
     return pmd2ase, ase2pmd
 
+def get_dimensions(esp_lines, verbose=True):
+      # The number of gridpoints in x/y/z direction is the cuberoot of the total
+      grid_dimension_float = np.power(len(esp_lines), 1/3)
+      grid_dimension_int = int(round(grid_dimension_float))
+      if verbose:
+          print('Read grid of dimensions {}, cast to {}.'.format(grid_dimension_float, 
+                                                                 grid_dimension_int))
+      return grid_dimension_int
 
 def parse_cubefile(path='esp.cube'):
    """Read atom positions from cubfile."""
@@ -54,25 +62,21 @@ def parse_cubefile(path='esp.cube'):
       nr_atoms = int([float(s) for s in nr_atoms.split() if s.isdigit][0])
 
       # Line four to seven are the grid basis vectors
-      e_x = cubefile.readline()
-      e_y = cubefile.readline()
-      e_z = cubefile.readline()
+      e_x = float(cubefile.readline().split()[1])
+      e_y = float(cubefile.readline().split()[2])
+      e_z = float(cubefile.readline().split()[3])
+      grid_vectors = (e_x, e_y, e_z)
 
       # The next 128 lines are the positions of the atoms
       atoms = []
       for i in range(0, nr_atoms):
          line = cubefile.readline()
          q, _, x, y, z = [float(s) for s in line.split() if s.isdigit]
-         atoms += [(x, y, z)]
-   # esp_start_pos = cubefile.tell()
+         atoms += [np.array([x, y, z])]
       print('header read.')
-      esp_lines = cubefile.readlines()
-      print('readlines() done')
-      #dft_esp = np.loadtxt(esp_lines, delimiter=',')
-      print(esp_lines[50000])
-      exit()
+      dft_esp = cubefile.readlines()
 
-   return atoms, dft_esp# esp_start_pos
+   return atoms, dft_esp, grid_vectors
 
 
 def combine_data(df, atom_positions, pmd2ase):
@@ -117,10 +121,55 @@ def extract_dft_esp(path, probe_position, esp_start_pos):
    with open(path, 'r') as cubefile:
       cubefile.seek(esp_start_pos)
 
+def line_to_xyz(dft_esp, line_number, grid_vectors, test=False):
+   """Convert cartesian coordinates to line number in cube file."""
+   grid_dimension = get_dimensions(dft_esp, verbose=False)
+
+   x = line_number // (grid_dimension ** 2) * grid_vectors[0]
+   y = (line_number % (grid_dimension **2)) // grid_dimension * grid_vectors[1]
+   z = line_number % grid_dimension * grid_vectors[2]
+
+   if test:
+      i = 0
+      for x_i in range(0, grid_dimension):
+         for y_i in range(0, grid_dimension):
+            for z_i in range(0, grid_dimension):
+               if i == line_number:
+                  xyz = np.array([x_i, y_i, z_i]) * grid_vectors[0]
+                  assert xyz == np.array([x, y, z])
+               i += 1
+      return RuntimeError('Return should have happened in loop.')
+ 
+   return np.array([x, y, z])
+
+def check_distance(xyz, atom_positions, upper_bound=2, lower_bound=1):
+   distances = []
+   for i in range(0, len(atom_positions)):
+      distance = np.linalg.norm(xyz - atom_positions[i])
+      distances += [distance]
+   distances = np.array(distances)
+   if any(distances < lower_bound) or all(distances > upper_bound):
+      return False
+   else:
+      return True
+   
 
 def main():
    print('Parsing cubefile ...')
-   atom_positions, esp_start_pos = parse_cubefile(path='esp.cube')
+   atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
+
+   probe_positions = []
+   for i in range(0, 10000):
+       n = int(np.random.uniform(0, len(dft_esp)))
+       xyz = line_to_xyz(dft_esp, n, grid_vectors)
+       if check_distance(xyz, atom_positions) is True:
+           probe_positions += [n]
+           if len(probe_positions) > 100:
+               break
+   # These are the non-rejected probe spots in units of cubefiles line-numbers 
+   print(probe_positions)
+
+   exit()
    print('Parsing HORTON charges ...')
    charge_df = parse_charges()
    print('Getting ase - pmd conversion ...')
@@ -132,7 +181,11 @@ def main():
    charge_xyz = combine_data(charge_df, atom_positions, pmd2ase)
    horton_esp = get_esp(charge_xyz, (0, 0, 0))
 
-   # dft_esp = extract_dft_esp(path='esp.cube', probe_position = (0, 0, 0))
+   # TODO: 
+   # * get list of HORTON esp at probe positions
+   # * get list of DFT eps at proble pos
+   # * write RRMSD function
+   # * make units consistent
 
 if __name__ == '__main__':
    main()
