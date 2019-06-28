@@ -94,10 +94,16 @@ def combine_data(df, atom_positions, pmd2ase):
 
 def get_energy(charge, charge_position, probe_position):
    """Calculate electrostatic energy of probe wrt a point charge."""
+   # Cast to np.array
    charge_position = np.array(charge_position)
    probe_position = np.array(probe_position)
+   
+   # Calculate ESP energy
    energy = charge / np.linalg.norm(charge_position - probe_position)
-   # TODO: fix units
+
+   # Fix units to Hartree
+   energy *= ase.units.Hartree / 4 / np.pi 
+
    return energy
 
 
@@ -136,13 +142,14 @@ def line_to_xyz(dft_esp, line_number, grid_vectors, test=False):
             for z_i in range(0, grid_dimension):
                if i == line_number:
                   xyz = np.array([x_i, y_i, z_i]) * grid_vectors[0]
-                  assert xyz == np.array([x, y, z])
+                  assert all(np.isclose(xyz, np.array([x, y, z])))
+                  return np.array([x, y, z])
                i += 1
-      return RuntimeError('Return should have happened in loop.')
+      raise RuntimeError('Return should have happened in loop.')
  
    return np.array([x, y, z])
 
-def check_distance(xyz, atom_positions, upper_bound=2, lower_bound=1):
+def check_distance(xyz, atom_positions, upper_bound, lower_bound):
    distances = []
    for i in range(0, len(atom_positions)):
       distance = np.linalg.norm(xyz - atom_positions[i])
@@ -152,40 +159,69 @@ def check_distance(xyz, atom_positions, upper_bound=2, lower_bound=1):
       return False
    else:
       return True
+
+def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
+   probe_positions = []
+   for i in range(0, target_n * 10000):
+      # Sample random positions
+      n = int(np.random.uniform(0, len(dft_esp)))
+      # convert to cartesian coordinates
+      xyz = line_to_xyz(dft_esp, n, grid_vectors)
+      # Reject the point if it too close or far from the atom positions
+      if check_distance(xyz, atom_positions, upper_bound, lower_bound) is True:
+         probe_positions += [n]
+         n_positions = len(probe_positions) 
+         if n_positions >= target_n:
+            break
+   if n_positions < target_n:
+      raise RuntimeError('Not enough sample points produced: {} of {}'.format(n_positions, target_n))
+
+   return probe_positions
    
 
 def main():
    print('Parsing cubefile ...')
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
+   upper_bound = 2
+   lower_bound = 1
+   n_samples = 100
 
-   probe_positions = []
-   for i in range(0, 10000):
-       n = int(np.random.uniform(0, len(dft_esp)))
-       xyz = line_to_xyz(dft_esp, n, grid_vectors)
-       if check_distance(xyz, atom_positions) is True:
-           probe_positions += [n]
-           if len(probe_positions) > 100:
-               break
-   # These are the non-rejected probe spots in units of cubefiles line-numbers 
-   print(probe_positions)
+   # Get the non-rejected probe spots in units of cubefiles line-numbers 
+   probe_positions = reject_sample(atom_positions, dft_esp, grid_vectors, 
+                                   upper_bound, lower_bound, n_samples)
+ 
+   # Set up a table 
+   df = pd.DataFrame() 
+   df['dft_lines'] = probe_positions
+   xyz = [line_to_xyz(dft_esp, n, grid_vectors) for n in probe_positions]
+   df['x'] = [pos[0] for pos in xyz]
+   df['y'] = [pos[1] for pos in xyz]
+   df['z'] = [pos[2] for pos in xyz]
+   
+   # Look up DFT eletrostatic potential at probe positions
+   dft_esp_at_probe = []
+   for line in probe_positions:
+      dft_esp_at_probe += [float(dft_esp[line].strip())]
+   df['dft_esp'] = dft_esp_at_probe
 
-   exit()
+   # Calculate HORTON potential
    print('Parsing HORTON charges ...')
    charge_df = parse_charges()
    print('Getting ase - pmd conversion ...')
    pmd2ase, ase2pmd = create_structure()
    print('Calculating HORTON ESP')
- 
-   extract_dft_esp('esp.cube', (0, 0, 0), esp_start_pos=esp_start_pos)
-
    charge_xyz = combine_data(charge_df, atom_positions, pmd2ase)
-   horton_esp = get_esp(charge_xyz, (0, 0, 0))
+   horton_esp_at_probe = []
+   for line in probe_positions:
+      horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
+   df['horton_esp'] = horton_esp_at_probe
+
+   print(df.head())
+   print(df['horton_esp'].corr(df['dft_esp']))
 
    # TODO: 
-   # * get list of HORTON esp at probe positions
-   # * get list of DFT eps at proble pos
-   # * write RRMSD function
    # * make units consistent
+   # * write RRMSD function
 
 if __name__ == '__main__':
    main()
