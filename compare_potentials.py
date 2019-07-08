@@ -11,6 +11,7 @@ import seaborn as sns
 import ase
 import parmed as pmd
 import warnings
+import time
 from smamp.tools import read_atom_numbers
 
 
@@ -182,9 +183,22 @@ def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_boun
 def main():
    print('Parsing cubefile ...')
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
-   upper_bound = 2
-   lower_bound = 1
-   n_samples = 100
+   upper_bound = 7
+   lower_bound = 1.8 
+
+   n_samples = 1000000
+   #n_samples = 10
+
+   # Look up DFT eletrostatic potential at probe positions
+
+   # Calculate HORTON potential
+   #print('Parsing HORTON charges ...')
+   charge_df = parse_charges()
+   #print('Getting ase - pmd conversion ...')
+   pmd2ase, ase2pmd = create_structure()
+
+
+   start = time.time()
 
    # Get the non-rejected probe spots in units of cubefiles line-numbers 
    probe_positions = reject_sample(atom_positions, dft_esp, grid_vectors, 
@@ -197,31 +211,31 @@ def main():
    df['x'] = [pos[0] for pos in xyz]
    df['y'] = [pos[1] for pos in xyz]
    df['z'] = [pos[2] for pos in xyz]
-   
-   # Look up DFT eletrostatic potential at probe positions
+
    dft_esp_at_probe = []
    for line in probe_positions:
       dft_esp_at_probe += [float(dft_esp[line].strip())]
    df['dft_esp'] = dft_esp_at_probe
 
-   # Calculate HORTON potential
-   print('Parsing HORTON charges ...')
-   charge_df = parse_charges()
-   print('Getting ase - pmd conversion ...')
-   pmd2ase, ase2pmd = create_structure()
-   print('Calculating HORTON ESP')
+   #print('Calculating HORTON ESP')
    charge_xyz = combine_data(charge_df, atom_positions, pmd2ase)
    horton_esp_at_probe = []
    for line in probe_positions:
       horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
    df['horton_esp'] = horton_esp_at_probe
 
-   print(df.head())
-   print(df['horton_esp'].corr(df['dft_esp']))
+
+   df['square_dev'] = (df['horton_esp'] - df['dft_esp']).pow(2)
+   rrmsd = np.sqrt(df.square_dev.mean())
+
+   with open('quality.csv', 'a') as outfile:
+      outfile.write('{}, {}\n'.format(rrmsd, df['horton_esp'].corr(df['dft_esp'])))
+
+   print('{} samples done in {}'.format(n_samples, time.time() - start))
+   print('Done')
 
    # TODO: 
    # * make units consistent
-   # * write RRMSD function
 
 if __name__ == '__main__':
    main()
