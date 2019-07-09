@@ -166,8 +166,8 @@ def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_boun
    return probe_positions
    
 
-def main():
-   print('Parsing cubefile ...')
+def main(verbose=False):
+   if verbose: print('Parsing cubefile ...')
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
    upper_bound = 7
    lower_bound = 1.8 
@@ -178,9 +178,9 @@ def main():
    # Look up DFT eletrostatic potential at probe positions
 
    # Calculate HORTON potential
-   #print('Parsing HORTON charges ...')
+   if verbose: print('Parsing HORTON charges ...')
    charge_df = parse_charges()
-   #print('Getting ase - pmd conversion ...')
+   if verbose: print('Getting ase - pmd conversion ...')
    pmd2ase, ase2pmd = create_structure()
 
 
@@ -203,13 +203,13 @@ def main():
       dft_esp_at_probe += [float(dft_esp[line].strip()) * -1]
    df['dft_esp'] = dft_esp_at_probe
 
-   #print('Calculating HORTON ESP')
+   if verbose: print('Calculating HORTON ESP')
    charge_xyz = combine_data(charge_df, atom_positions, pmd2ase)
    horton_esp_at_probe = []
    for line in probe_positions:
       horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
    df['horton_esp'] = horton_esp_at_probe
-   print(df)
+   if verbose: print(df)
 
    df['square_dev'] = (df['horton_esp'] - df['dft_esp']).pow(2)
    rrmsd = np.sqrt(df.square_dev.mean())
@@ -218,9 +218,8 @@ def main():
       #outfile.write('{}, {}\n'.format(rrmsd, df['horton_esp'].corrwith(df['dft_esp'])))
       print('{}, {}\n'.format(rrmsd, df['horton_esp'].corr(df['dft_esp'])))
   
-   exit() 
-   print('{} samples done in {}'.format(n_samples, time.time() - start))
-   print('Done')
+   if verbose: print('{} samples done in {}'.format(n_samples, time.time() - start))
+   if verbose: print('Done')
 
 if __name__ == '__main__':
    main()
