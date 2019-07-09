@@ -201,7 +201,7 @@ def sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, lower_b
       #print('{}, {}, {}, {}\n'.format(n_samples, rrmsd, correlation, run_time))
   
 
-def main(sweep=False):
+def main(sweep=True):
    if not sweep: print('Parsing cubefile ...')
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
    upper_bound = 7
@@ -219,7 +219,8 @@ def main(sweep=False):
    pmd2ase, ase2pmd = create_structure()
 
    if sweep:
-      for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 10250]:
+      #for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 10250]:
+      for n_samples in [200000, 400000]:
          sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, 
                           lower_bound, n_samples, charge_df, pmd2ase)
       return
