@@ -15,7 +15,7 @@ import time
 from smamp.tools import read_atom_numbers
 
 
-def create_structure(infile_pdb='snapshot_100.pdb', infile_top='topol.top', hydrogen_file='hydrogen_per_atom.csv', strip_string=':SOL,CL'):
+def create_structure(infile_pdb='snapshot_600.pdb', infile_top='topol.top', hydrogen_file='hydrogen_per_atom.csv', strip_string=':SOL,CL'):
     implicitHbondingPartners = read_atom_numbers(hydrogen_file)
 
     ase_struct = ase.io.read(infile_pdb)
@@ -74,7 +74,6 @@ def parse_cubefile(path='esp.cube'):
          line = cubefile.readline()
          q, _, x, y, z = [float(s) for s in line.split() if s.isdigit]
          atoms += [np.array([x, y, z])]
-      print('header read.')
       dft_esp = cubefile.readlines()
 
    return atoms, dft_esp, grid_vectors
@@ -93,28 +92,14 @@ def combine_data(df, atom_positions, pmd2ase):
    return df
 
 
-def get_energy(charge, charge_position, probe_position):
-   """Calculate electrostatic energy of probe wrt a point charge."""
-   # Cast to np.array
-   charge_position = np.array(charge_position)
-   probe_position = np.array(probe_position)
-   
-   # Calculate ESP energy
-   energy = charge / np.linalg.norm(charge_position - probe_position)
-
-   # Fix units to Hartree
-   energy *= ase.units.Hartree / 4 / np.pi 
-
-   return energy
-
-
 def get_esp(df, probe_position):
    """Add up the energy contribution of point charges.""" 
    esp = 0
+   probe_position = np.array(probe_position)
    for index, row in df.iterrows():
-      esp += get_energy(charge=row.q,
-                        charge_position=(row.x, row.y, row.z),
-                        probe_position=probe_position)
+      distance = np.linalg.norm(np.array([row.x, row.y, row.z]) - probe_position)
+      esp_contrib = row.q / distance
+      esp += esp_contrib
    return esp
 
 
@@ -154,18 +139,19 @@ def check_distance(xyz, atom_positions, upper_bound, lower_bound):
    distances = []
    for i in range(0, len(atom_positions)):
       distance = np.linalg.norm(xyz - atom_positions[i])
+      if distance < lower_bound:
+         return False
       distances += [distance]
    distances = np.array(distances)
-   if any(distances < lower_bound) or all(distances > upper_bound):
+   if all(distances > upper_bound):
       return False
-   else:
-      return True
+   return True
 
 def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
    probe_positions = []
-   for i in range(0, target_n * 10000):
-      # Sample random positions
-      n = int(np.random.uniform(0, len(dft_esp)))
+   for i in range(target_n * 10000):
+      # Sample random position
+      n = np.random.randint(0, len(dft_esp))
       # convert to cartesian coordinates
       xyz = line_to_xyz(dft_esp, n, grid_vectors)
       # Reject the point if it too close or far from the atom positions
@@ -186,8 +172,8 @@ def main():
    upper_bound = 7
    lower_bound = 1.8 
 
-   n_samples = 1000000
-   #n_samples = 10
+   #n_samples = 1000000 # takes 7.4 hours
+   n_samples = 1000
 
    # Look up DFT eletrostatic potential at probe positions
 
@@ -214,7 +200,7 @@ def main():
 
    dft_esp_at_probe = []
    for line in probe_positions:
-      dft_esp_at_probe += [float(dft_esp[line].strip())]
+      dft_esp_at_probe += [float(dft_esp[line].strip()) * -1]
    df['dft_esp'] = dft_esp_at_probe
 
    #print('Calculating HORTON ESP')
@@ -223,19 +209,18 @@ def main():
    for line in probe_positions:
       horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
    df['horton_esp'] = horton_esp_at_probe
-
+   print(df)
 
    df['square_dev'] = (df['horton_esp'] - df['dft_esp']).pow(2)
    rrmsd = np.sqrt(df.square_dev.mean())
 
    with open('quality.csv', 'a') as outfile:
-      outfile.write('{}, {}\n'.format(rrmsd, df['horton_esp'].corr(df['dft_esp'])))
-
+      #outfile.write('{}, {}\n'.format(rrmsd, df['horton_esp'].corrwith(df['dft_esp'])))
+      print('{}, {}\n'.format(rrmsd, df['horton_esp'].corr(df['dft_esp'])))
+  
+   exit() 
    print('{} samples done in {}'.format(n_samples, time.time() - start))
    print('Done')
-
-   # TODO: 
-   # * make units consistent
 
 if __name__ == '__main__':
    main()
