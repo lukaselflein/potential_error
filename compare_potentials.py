@@ -92,7 +92,7 @@ def combine_data(df, atom_positions, pmd2ase):
    return df
 
 
-def get_esp(df, probe_position):
+def old_get_esp(df, probe_position):
    """Add up the energy contribution of point charges.""" 
    esp = 0
    probe_position = np.array(probe_position)
@@ -101,6 +101,19 @@ def get_esp(df, probe_position):
       esp_contrib = row.q / distance
       esp += esp_contrib
    return esp
+
+
+def get_esp(df, probe_position):
+   """Add up the energy contribution of point charges.""" 
+   probe_position = np.array(probe_position)
+   # Transform the locations of the atom from the dataframe to numpy
+   charge_locs = df[['x', 'y', 'z']].values
+   # The distance between probe charge and the atoms 
+   distances = np.linalg.norm(charge_locs - probe_position, axis=1)
+   # ESP according to Columb's law [e/A]
+   esp = df.q.values / distances
+
+   return esp.sum()
 
 
 def parse_charges(path='fitted_point_charges.csv'):
@@ -147,7 +160,8 @@ def check_distance(xyz, atom_positions, upper_bound, lower_bound):
       return False
    return True
 
-def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
+
+def old_reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
    probe_positions = []
    for i in range(target_n * 10000):
       # Sample random position
@@ -165,6 +179,25 @@ def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_boun
 
    return probe_positions
    
+def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
+   probe_positions = []
+   for i in range(target_n * 10000):
+      # Sample random position
+      n = np.random.randint(low=0, high=len(dft_esp))#, size=target_n)
+      # convert to cartesian coordinates
+      xyz = line_to_xyz(dft_esp, n, grid_vectors)#.T
+
+      # Reject the point if it too close or far from the atom positions
+      if check_distance(xyz, atom_positions, upper_bound, lower_bound) is True:
+         probe_positions += [n]
+         n_positions = len(probe_positions) 
+         if n_positions >= target_n:
+            break
+   if n_positions < target_n:
+      raise RuntimeError('Not enough sample points produced: {} of {}'.format(n_positions, target_n))
+
+   return probe_positions
+
 def sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound,
                      n_samples, charge_df, pmd2ase):
    start = time.time()
@@ -202,33 +235,40 @@ def sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, lower_b
   
 
 def main(sweep=True):
-   if not sweep: print('Parsing cubefile ...')
+   # if not sweep: print('Parsing cubefile ...')
+   print('Parsing cubefile ...')
+   setup_start = time.time()
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
    upper_bound = 7
    lower_bound = 1.8 
 
    #n_samples = 1000000 # takes 7.4 hours
-   n_samples = 1000
+   n_samples = 5000
 
    # Look up DFT eletrostatic potential at probe positions
 
    # Calculate HORTON potential
-   if not sweep : print('Parsing HORTON charges ...')
+   print('Parsing HORTON charges ...')
    charge_df = parse_charges()
-   if not sweep: print('Getting ase - pmd conversion ...')
+   print('Getting ase - pmd conversion ...')
    pmd2ase, ase2pmd = create_structure()
 
    if sweep:
       #for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 10250]:
-      for n_samples in [200000, 400000]:
+      for n_samples in [60000, 70000, 80000, 90000]:
          sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, 
                           lower_bound, n_samples, charge_df, pmd2ase)
       return
 
    print('Rejection sampling of esp locations, n = {} ...'.format(n_samples))
-   # Get the non-rejected probe spots in units of cubefiles line-numbers 
+   # Get the non-rejected probe spots in units of cubefiles line-numbers
+
+   print('setup: {} s'.format(time.time() - setup_start))
+   start = time.time()
    probe_positions = reject_sample(atom_positions, dft_esp, grid_vectors, 
                                    upper_bound, lower_bound, n_samples)
+   print('probe_positions: {} s'.format(time.time() - start))
+   start = time.time()
    # Set up a table 
    df = pd.DataFrame() 
    df['dft_lines'] = probe_positions
@@ -242,12 +282,14 @@ def main(sweep=True):
       dft_esp_at_probe += [float(dft_esp[line].strip()) * -1]
    df['dft_esp'] = dft_esp_at_probe
 
-   print('Calculating HORTON ESP ...')
+   #print('Calculating HORTON ESP ...')
    charge_xyz = combine_data(charge_df, atom_positions, pmd2ase)
    horton_esp_at_probe = []
    for line in probe_positions:
       horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
    df['horton_esp'] = horton_esp_at_probe
+
+   print('ESP calc: {} s'.format(time.time() - start))
 
    print('Calculating statistics ...')
    df['square_dev'] = (df['horton_esp'] - df['dft_esp']).pow(2)
