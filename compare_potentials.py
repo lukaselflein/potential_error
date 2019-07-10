@@ -11,7 +11,6 @@ import seaborn as sns
 import ase
 import parmed as pmd
 import warnings
-import time
 from smamp.tools import read_atom_numbers
 
 
@@ -92,17 +91,6 @@ def combine_data(df, atom_positions, pmd2ase):
    return df
 
 
-def old_get_esp(df, probe_position):
-   """Add up the energy contribution of point charges.""" 
-   esp = 0
-   probe_position = np.array(probe_position)
-   for index, row in df.iterrows():
-      distance = np.linalg.norm(np.array([row.x, row.y, row.z]) - probe_position)
-      esp_contrib = row.q / distance
-      esp += esp_contrib
-   return esp
-
-
 def get_esp(df, probe_position):
    """Add up the energy contribution of point charges.""" 
    probe_position = np.array(probe_position)
@@ -161,24 +149,6 @@ def check_distance(xyz, atom_positions, upper_bound, lower_bound):
    return True
 
 
-def old_reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
-   probe_positions = []
-   for i in range(target_n * 10000):
-      # Sample random position
-      n = np.random.randint(0, len(dft_esp))
-      # convert to cartesian coordinates
-      xyz = line_to_xyz(dft_esp, n, grid_vectors)
-      # Reject the point if it too close or far from the atom positions
-      if check_distance(xyz, atom_positions, upper_bound, lower_bound) is True:
-         probe_positions += [n]
-         n_positions = len(probe_positions) 
-         if n_positions >= target_n:
-            break
-   if n_positions < target_n:
-      raise RuntimeError('Not enough sample points produced: {} of {}'.format(n_positions, target_n))
-
-   return probe_positions
-   
 def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
    probe_positions = []
    for i in range(target_n * 10000):
@@ -198,54 +168,15 @@ def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_boun
 
    return probe_positions
 
-def sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound,
-                     n_samples, charge_df, pmd2ase):
-   start = time.time()
 
-   # Get the non-rejected probe spots in units of cubefiles line-numbers 
-   probe_positions = reject_sample(atom_positions, dft_esp, grid_vectors, 
-                                   upper_bound, lower_bound, n_samples)
-   # Set up a table 
-   df = pd.DataFrame() 
-   df['dft_lines'] = probe_positions
-   xyz = [line_to_xyz(dft_esp, n, grid_vectors) for n in probe_positions]
-   df['x'] = [pos[0] for pos in xyz]
-   df['y'] = [pos[1] for pos in xyz]
-   df['z'] = [pos[2] for pos in xyz]
-
-   dft_esp_at_probe = []
-   for line in probe_positions:
-      dft_esp_at_probe += [float(dft_esp[line].strip()) * -1]
-   df['dft_esp'] = dft_esp_at_probe
-
-   charge_xyz = combine_data(charge_df, atom_positions, pmd2ase)
-   horton_esp_at_probe = []
-   for line in probe_positions:
-      horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
-   df['horton_esp'] = horton_esp_at_probe
-
-   df['square_dev'] = (df['horton_esp'] - df['dft_esp']).pow(2)
-   rrmsd = np.sqrt(df.square_dev.mean())
-
-   with open('convergence.csv', 'a') as outfile:
-      correlation = df['horton_esp'].corr(df['dft_esp'])
-      run_time = time.time() - start
-      outfile.write('{}, {}, {}, {}\n'.format(n_samples, rrmsd, correlation, run_time))
-      #print('{}, {}, {}, {}\n'.format(n_samples, rrmsd, correlation, run_time))
-  
-
-def main(sweep=True):
-   # if not sweep: print('Parsing cubefile ...')
+def main():
    print('Parsing cubefile ...')
-   setup_start = time.time()
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
    upper_bound = 7
    lower_bound = 1.8 
 
-   #n_samples = 1000000 # takes 7.4 hours
-   n_samples = 5000
-
-   # Look up DFT eletrostatic potential at probe positions
+   #n_samples = 40000
+   n_samples = 4000
 
    # Calculate HORTON potential
    print('Parsing HORTON charges ...')
@@ -253,22 +184,10 @@ def main(sweep=True):
    print('Getting ase - pmd conversion ...')
    pmd2ase, ase2pmd = create_structure()
 
-   if sweep:
-      for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 20000, 30000, 40000, 50000, 60000]:
-      #for n_samples in [60000, 70000, 80000, 90000]:
-         sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, 
-                          lower_bound, n_samples, charge_df, pmd2ase)
-      return
-
    print('Rejection sampling of esp locations, n = {} ...'.format(n_samples))
    # Get the non-rejected probe spots in units of cubefiles line-numbers
-
-   print('setup: {} s'.format(time.time() - setup_start))
-   start = time.time()
    probe_positions = reject_sample(atom_positions, dft_esp, grid_vectors, 
                                    upper_bound, lower_bound, n_samples)
-   print('probe_positions: {} s'.format(time.time() - start))
-   start = time.time()
    # Set up a table 
    df = pd.DataFrame() 
    df['dft_lines'] = probe_positions
@@ -288,8 +207,6 @@ def main(sweep=True):
    for line in probe_positions:
       horton_esp_at_probe += [get_esp(charge_xyz, line_to_xyz(dft_esp, line, grid_vectors))]
    df['horton_esp'] = horton_esp_at_probe
-
-   print('ESP calc: {} s'.format(time.time() - start))
 
    print('Calculating statistics ...')
    df['square_dev'] = (df['horton_esp'] - df['dft_esp']).pow(2)
