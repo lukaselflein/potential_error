@@ -24,11 +24,16 @@ df.columns = df.columns.map(str.strip)
 df['lnrho'] = pd.to_numeric(df['lnrho'])
 df['sigma'] = df['sigma'].apply(lambda x: str(x))
 df = df.loc[df.lnrho < -3]
-df = df.loc[df.charge == 0]
+df_0 = df.loc[df.charge == 0]
+df_1 = df.loc[df.charge == 1]
+df_2 = df.loc[df.charge == 2]
 print(df)
 
 print('Plotting ...')
-p = sns.pointplot(data=df, x='lnrho', y='rrmsd', hue='sigma', palette='GnBu_d')
-#p = sns.pointplot(data=df, x='sigma', y='rrmsd', hue='lnrho', palette='GnBu_d')
-p.figure.savefig('lnrho_vs_rrmsd.png')
+p = sns.pointplot(data=df_0, x='lnrho', y='rrmsd', hue='sigma', palette='GnBu_d')
+p.figure.savefig('0_lnrho_vs_rrmsd.png')
+p = sns.pointplot(data=df_1, x='lnrho', y='rrmsd', hue='sigma', palette='GnBu_d')
+p.figure.savefig('1_lnrho_vs_rrmsd.png')
+p = sns.pointplot(data=df_2, x='lnrho', y='rrmsd', hue='sigma', palette='GnBu_d')
+p.figure.savefig('2_lnrho_vs_rrmsd.png')
 print('Done.')
