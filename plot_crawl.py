@@ -20,6 +20,10 @@ for data_file in data_paths:
 
 df = collect_df.reset_index(drop=True)
 df.columns = df.columns.map(str.strip)
-lp = sns.lineplot(data=df, x='lnrho', y='rrmsd', hue='sigma')
+df['lnrho'] = pd.to_numeric(df['lnrho'])
+df['sigma'] = df['sigma'].apply(lambda x: str(x))
+df = df.loc[df.lnrho < -3]
 
-
+p = sns.pointplot(data=df, x='lnrho', y='rrmsd', hue='sigma', palette='GnBu_d')
+#p = sns.pointplot(data=df, x='sigma', y='rrmsd', hue='lnrho', palette='GnBu_d')
+plt.show()
