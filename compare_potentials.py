@@ -254,8 +254,8 @@ def main(sweep=True):
    pmd2ase, ase2pmd = create_structure()
 
    if sweep:
-      #for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 10250]:
-      for n_samples in [60000, 70000, 80000, 90000]:
+      for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 20000, 30000, 40000, 50000, 60000]:
+      #for n_samples in [60000, 70000, 80000, 90000]:
          sweep_samplesize(atom_positions, dft_esp, grid_vectors, upper_bound, 
                           lower_bound, n_samples, charge_df, pmd2ase)
       return
