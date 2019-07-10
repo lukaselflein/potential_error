@@ -22,8 +22,7 @@ from compare_potentials import line_to_xyz, check_distance, reject_sample
 
 def calc_error(cube_path='esp.cube', pdb_path='snapshot_600.pdb', top_path='topol.top', 
                hydrogen_path='hydrogen_per_atom.csv', charge_path='fitted_point_charges.csv',
-               upper=7, lower=1.8, n_samples=40000, pmd2ase=None, out_path=None, time=None,
-               lnrho=None, sigma=None):
+               upper=7, lower=1.8, n_samples=40000, pmd2ase=None):
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path=cube_path)
 
    # Calculate HORTON potential
@@ -60,45 +59,58 @@ def calc_error(cube_path='esp.cube', pdb_path='snapshot_600.pdb', top_path='topo
    rrmsd = np.sqrt(df.square_dev.mean())
    correlation = df['horton_esp'].corr(df['dft_esp'])
    
-   with open(out_path, 'w') as outfile:
-      outfile.write('time, lnrho, sigma, rrmsd\n')
-      outfile.write('{}, {}, {}, {}\n'.format(time, lnrho, sigma, rrmsd))
 
    return rrmsd, pmd2ase
 
 def main():
-   pmd2ase = None
-   root = '../0_charge/1_charge_cycle'
-   pdb_path = find(path=root, folder_keyword='0_initial_structure', file_keyword='.pdb')[0]
-   top_path = find(path=root, folder_keyword='0_initial_structure', file_keyword='.top')[0]
-   hyd_path = find(path='../0_charge', folder_keyword='fitting', file_keyword='hydrogen_per_atom.csv')[0]
-   charge_paths = find(path=root, folder_keyword='4_horton_cost_function/lnrho', file_keyword='charges',
-                      nr_occ=None)
-   lnrho_range = []
-   sigma_range = []
-   time_range = []
-   random.shuffle(charge_paths)
+   charges = [0, 1, 2]
+   random.shuffle(charges)
+   for charge in charges:
+      pmd2ase = None
+      root = '../{}_charge/1_charge_cycle'.format(charge)
+      pdb_path = find(path=root, folder_keyword='0_initial_structure', file_keyword='.pdb')[0]
+      top_path = find(path=root, folder_keyword='0_initial_structure', file_keyword='.top')[0]
+      hyd_path = find(path='../{}_charge'.format(charge), folder_keyword='fitting', 
+                      file_keyword='hydrogen_per_atom.csv')[0]
+      # Find all files with point charges
+      charge_paths = find(path=root, folder_keyword='4_horton_cost_function/lnrho', 
+                          file_keyword='charges', nr_occ=None)
+      lnrho_range = []
+      sigma_range = []
+      time_range = []
+      random.shuffle(charge_paths)
 
-   for charge_path in charge_paths:
-      work_dir = os.path.split(os.path.split(os.path.split(charge_path)[0])[0])[0]
-      cube_path = find(path=work_dir, folder_keyword='2_dft_calculations', file_keyword='esp.cube')[0]
-      # Parse parameters from filename
-      lnrho, sigma = charge_path[-15:-4].split('_')[-2:]
-      time = charge_path.split('/')[3].split('_')[0]
+      i = 0
+      for charge_path in charge_paths:
+         i += 1
+         if i % 10 == 0:
+            print('{} of {}'.format(i, len(charge_paths)))
 
-      if not sigma in ['0.2', '0.4', '0.6', '0.8', '1.0', '1.2', '1.4', '1.6']:
-         print('skipping sigma {}'.format(sigma))
-         continue
+         work_dir = os.path.split(os.path.split(os.path.split(charge_path)[0])[0])[0]
+         cube_path = find(path=work_dir, folder_keyword='2_dft_calculations', file_keyword='esp.cube')[0]
+         # Parse parameters from filename
+         lnrho, sigma = charge_path[-15:-4].split('_')[-2:]
+         time = charge_path.split('/')[3].split('_')[0]
 
-      out_path = 'data/pot_err_{}_{}_{}.csv'.format(time, lnrho, sigma)
+         if not sigma in ['0.2', '0.4', '0.6', '0.8', '1.0', '1.2', '1.4', '1.6']:
+            print('skipping sigma {}'.format(sigma))
+            continue
 
-      if os.path.exists(out_path):
-         print('exists, skipping.')
-         continue
+         out_path = 'data/pot_err_{}_{}_{}_{}.csv'.format(charge, time, lnrho, sigma)
 
-      rrmsd, pmd2ase = calc_error(cube_path, pdb_path, top_path, hyd_path, charge_path, 
-                                  pmd2ase=pmd2ase, n_samples=40000, out_path=out_path,
-                                  time=time, lnrho=lnrho, sigma=sigma)
+         if os.path.exists(out_path):
+            print('exists, skipping.')
+            continue
+         
+         # Calculate the error between DFT-ESP and point-charge ESP
+         rrmsd, pmd2ase = calc_error(cube_path, pdb_path, top_path, hyd_path, charge_path, 
+                                     pmd2ase=pmd2ase, n_samples=40000)
+
+         # Write to file
+         with open(out_path, 'w') as outfile:
+            outfile.write('charge, time, lnrho, sigma, rrmsd\n')
+            outfile.write('{}, {}, {}, {}, {}\n'.format(charge, time, lnrho, sigma, rrmsd))
+
    print('Done.')
 if __name__ == '__main__':
    main()

@@ -24,6 +24,8 @@ df.columns = df.columns.map(str.strip)
 df['lnrho'] = pd.to_numeric(df['lnrho'])
 df['sigma'] = df['sigma'].apply(lambda x: str(x))
 df = df.loc[df.lnrho < -3]
+df = df.loc[df.charge == 0]
+print(df)
 
 print('Plotting ...')
 p = sns.pointplot(data=df, x='lnrho', y='rrmsd', hue='sigma', palette='GnBu_d')
