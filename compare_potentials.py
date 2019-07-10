@@ -49,7 +49,7 @@ def get_dimensions(esp_lines, verbose=True):
                                                                  grid_dimension_int))
       return grid_dimension_int
 
-def parse_cubefile(path='esp.cube'):
+def parse_cubefile(path):
    """Read atom positions from cubfile."""
    with open(path, 'r') as cubefile:
       
@@ -104,7 +104,7 @@ def get_esp(df, probe_position):
    return esp.sum()
 
 
-def parse_charges(path='fitted_point_charges.csv'):
+def parse_charges(path):
    """Read HORTON point charge .csv file."""
    df = pd.read_csv(path)
    df = df[['atom', 'residue', 'q']]
@@ -180,7 +180,7 @@ def main():
 
    # Calculate HORTON potential
    print('Parsing HORTON charges ...')
-   charge_df = parse_charges()
+   charge_df = parse_charges(path='fitted_point_charges.csv')
    print('Getting ase - pmd conversion ...')
    pmd2ase, ase2pmd = create_structure()
 
