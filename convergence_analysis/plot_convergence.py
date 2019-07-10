@@ -16,7 +16,7 @@ df = pd.read_csv('convergence.csv')
 df = df.melt(id_vars=['n_samples'], value_vars=['rrmsd'])
 
 # Make boxplot of convergence vs samplesize
-sns.boxplot(x='n_samples', y='value', data=m_df)
+sns.boxplot(x='n_samples', y='value', data=df)
 plt.show()
 
 # Make plot of sample size vs time

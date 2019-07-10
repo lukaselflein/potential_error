@@ -26,8 +26,6 @@ def calc_error(cube_path='esp.cube', pdb_path='snapshot_600.pdb', top_path='topo
                lnrho=None, sigma=None):
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path=cube_path)
 
-   n_samples = 400
-
    # Calculate HORTON potential
    charge_df = parse_charges(charge_path)
 
@@ -99,7 +97,7 @@ def main():
          continue
 
       rrmsd, pmd2ase = calc_error(cube_path, pdb_path, top_path, hyd_path, charge_path, 
-                                  pmd2ase=pmd2ase, n_samples=4000, out_path=out_path,
+                                  pmd2ase=pmd2ase, n_samples=40000, out_path=out_path,
                                   time=time, lnrho=lnrho, sigma=sigma)
    print('Done.')
 if __name__ == '__main__':

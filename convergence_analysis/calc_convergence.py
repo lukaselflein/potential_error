@@ -13,6 +13,9 @@ import parmed as pmd
 import warnings
 import time
 from smamp.tools import read_atom_numbers
+import sys
+sys.path.append("..")
+
 from compare_potentials import create_structure, get_dimensions, parse_cubefile
 from compare_potentials import combine_data, get_esp, parse_charges, extract_dft_esp
 from compare_potentials import line_to_xyz, check_distance, reject_sample
@@ -25,10 +28,10 @@ def main(sweep=True):
    lower_bound = 1.8 
 
    # Calculate HORTON potential
-   charge_df = parse_charges()
+   charge_df = parse_charges(path='fitted_point_charges.csv')
    pmd2ase, ase2pmd = create_structure()
 
-   for n_samples in [100, 500, 1000, 2500, 5000, 7500, 10000, 20000, 30000, 40000, 50000, 60000]:
+   for n_samples in [500, 1000, 2500, 5000, 7500, 10000, 20000, 30000, 40000, 50000, 60000]:
       print(n_samples)
       start = time.time()
 
