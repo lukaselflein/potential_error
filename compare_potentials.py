@@ -15,44 +15,45 @@ from smamp.tools import read_atom_numbers
 
 
 def create_structure(infile_pdb='snapshot_600.pdb', infile_top='topol.top', hydrogen_file='hydrogen_per_atom.csv', strip_string=':SOL,CL'):
-    implicitHbondingPartners = read_atom_numbers(hydrogen_file)
+   """Create a lookup-table to transform index-based (ase) and atom-name-based (pdb) formats into each other."""
+   implicitHbondingPartners = read_atom_numbers(hydrogen_file)
 
-    ase_struct = ase.io.read(infile_pdb)
-    pmd_struct = pmd.load_file(infile_pdb)
+   ase_struct = ase.io.read(infile_pdb)
+   pmd_struct = pmd.load_file(infile_pdb)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        pmd_top = pmd.gromacs.GromacsTopologyFile(infile_top, parametrize=False)
+   with warnings.catch_warnings():
+     warnings.simplefilter("ignore")
+     pmd_top = pmd.gromacs.GromacsTopologyFile(infile_top, parametrize=False)
 
-    # strip water and electrolyte from system (if not yet done in .top)
-    pmd_top.strip(strip_string)
-    pmd_top.box = pmd_struct.box # Needed because .pdb contains box info
-    pmd_top.positions = pmd_struct.positions
+   # strip water and electrolyte from system (if not yet done in .top)
+   pmd_top.strip(strip_string)
+   pmd_top.box = pmd_struct.box # Needed because .pdb contains box info
+   pmd_top.positions = pmd_struct.positions
 
-    names = [ a.name for a in pmd_top.atoms ]
-    residues = [ a.residue.name for a in pmd_top.atoms ]
+   names = [ a.name for a in pmd_top.atoms ]
+   residues = [ a.residue.name for a in pmd_top.atoms ]
 
-    ase_index = np.arange(len(ase_struct))
+   ase_index = np.arange(len(ase_struct))
 
-    atom_residue_list = list(zip(names, residues))
-    ase2pmd = dict(zip(ase_index, atom_residue_list))
-    pmd2ase = dict(zip(atom_residue_list, ase_index))
+   atom_residue_list = list(zip(names, residues))
+   ase2pmd = dict(zip(ase_index, atom_residue_list))
+   pmd2ase = dict(zip(atom_residue_list, ase_index))
 
-    return pmd2ase, ase2pmd
+   return pmd2ase, ase2pmd
 
 def get_dimensions(esp_lines, verbose=True):
-      # The number of gridpoints in x/y/z direction is the cuberoot of the total
-      grid_dimension_float = np.power(len(esp_lines), 1/3)
-      grid_dimension_int = int(round(grid_dimension_float))
-      if verbose:
-          print('Read grid of dimensions {}, cast to {}.'.format(grid_dimension_float, 
-                                                                 grid_dimension_int))
-      return grid_dimension_int
+   """Extract the number of gridpoints in each dimension from .cube file.""" 
+   # The number of gridpoints in x/y/z direction is the cuberoot of the total
+   grid_dimension_float = np.power(len(esp_lines), 1/3)
+   grid_dimension_int = int(round(grid_dimension_float))
+   if verbose:
+       print('Read grid of dimensions {}, cast to {}.'.format(grid_dimension_float, 
+                                                              grid_dimension_int))
+   return grid_dimension_int
 
 def parse_cubefile(path):
    """Read atom positions from cubfile."""
    with open(path, 'r') as cubefile:
-      
       # The first two lines are header
       header = cubefile.readline()
       loop_def = cubefile.readline()
@@ -110,10 +111,6 @@ def parse_charges(path):
    df = df[['atom', 'residue', 'q']]
    return df
 
-def extract_dft_esp(path, probe_position, esp_start_pos):
-   with open(path, 'r') as cubefile:
-      cubefile.seek(esp_start_pos)
-
 def line_to_xyz(dft_esp, line_number, grid_vectors, test=False):
    """Convert cartesian coordinates to line number in cube file."""
    grid_dimension = get_dimensions(dft_esp, verbose=False)
@@ -137,6 +134,7 @@ def line_to_xyz(dft_esp, line_number, grid_vectors, test=False):
    return np.array([x, y, z])
 
 def check_distance(xyz, atom_positions, upper_bound, lower_bound):
+   """Return True/False if distance-constraints are fullfilled/unfullfilled."""
    distances = []
    for i in range(0, len(atom_positions)):
       distance = np.linalg.norm(xyz - atom_positions[i])
@@ -150,6 +148,7 @@ def check_distance(xyz, atom_positions, upper_bound, lower_bound):
 
 
 def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_bound, target_n):
+   """Return `target_n` random positions on the dft grid fulfilling distance constraints."""
    probe_positions = []
    for i in range(target_n * 10000):
       # Sample random position
@@ -170,6 +169,7 @@ def reject_sample(atom_positions, dft_esp, grid_vectors, upper_bound, lower_boun
 
 
 def main():
+   """Execute everything."""
    print('Parsing cubefile ...')
    atom_positions, dft_esp, grid_vectors = parse_cubefile(path='esp.cube')
    upper_bound = 7
