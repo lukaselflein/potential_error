@@ -14,7 +14,7 @@ Sadly, time constraints do not allow for a full-blown integration into the curre
 Calling `crawl_calc.py` will start a search through `../{}_charge/1_charge_cycle` with {} ranging from 0 to 2.
 All `esp.cube` files found will be compared to their respective point-charge file, assumed to be in `4_horton_cost_fuction/lnrho/` and being named `charges_-9_0.8.csv`, with -9 and 0.8 being the lnrhoref/sigma parameters of the parameter sweep.
 
-To speed up the calculation process, the `crawl_calc.py` file is parallelized: calling it multiple times will result in performance roughly linear in the number of calls:
+To speed up the calculation process, the `crawl_calc.py` file is parallelized'; calling it multiple times will result in performance roughly linear in the number of calls:
 ```
 for i in `seq 1 1 20`
   do
