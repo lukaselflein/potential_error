@@ -21,5 +21,12 @@ for i in `seq 1 1 20`
   python crawl_calc.py > /dev/null &
   done
 ```
+## Calculation
+The point-charge potential is calculated as:
+$ ESP = \sum_i q_i / r_i - R$ 
+with (constrained) point charges $q_i$, location of the point charge $r_i$, and probe position $R$
+
+Probe positions are sampled on DFT grid points around the point charges, in a volume closer than 7 Angstrom and further away than 2 Angstrom.
+
 ## Sample
 ![Plot with Boxes and Points](0_lnrho_vs_rrmsd.png?raw=true)
