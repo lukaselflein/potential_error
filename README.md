@@ -26,7 +26,7 @@ The point-charge potential is calculated as:
 $ ESP = \sum_i q_i / r_i - R$ 
 with (constrained) point charges $q_i$, location of the point charge $r_i$, and probe position $R$
 
-Probe positions are sampled on DFT grid points around the point charges, in a distance from 7 to 2 Angstrom from the charges.
+Probe positions are sampled on DFT grid points around the point charges, in a distance from 7 to 2 Angstrom from the charges (independet from atom type).
 
 ## Sample
 ![Plot with Boxes and Points](0_lnrho_vs_rrmsd.png?raw=true)
