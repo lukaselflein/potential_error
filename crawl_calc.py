@@ -16,7 +16,7 @@ import random
 from smamp.tools import read_atom_numbers
 from smamp.tools import find
 from compare_potentials import create_structure, get_dimensions, parse_cubefile
-from compare_potentials import combine_data, get_esp, parse_charges #, extract_dft_esp
+from compare_potentials import combine_data, get_esp, parse_charges
 from compare_potentials import line_to_xyz, check_distance, reject_sample
 
 
