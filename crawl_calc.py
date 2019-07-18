@@ -16,7 +16,7 @@ import random
 from smamp.tools import read_atom_numbers
 from smamp.tools import find
 from compare_potentials import create_structure, get_dimensions, parse_cubefile
-from compare_potentials import combine_data, get_esp, parse_charges, extract_dft_esp
+from compare_potentials import combine_data, get_esp, parse_charges #, extract_dft_esp
 from compare_potentials import line_to_xyz, check_distance, reject_sample
 
 
@@ -63,6 +63,7 @@ def calc_error(cube_path='esp.cube', pdb_path='snapshot_600.pdb', top_path='topo
    return rrmsd, pmd2ase
 
 def main():
+   print('This is {}.'.format(__file__))
    charges = [0, 1, 2]
    random.shuffle(charges)
    for charge in charges:
@@ -78,6 +79,7 @@ def main():
       lnrho_range = []
       sigma_range = []
       time_range = []
+      print('{} paths found.'.format(len(charge_paths)))
       random.shuffle(charge_paths)
 
       i = 0
